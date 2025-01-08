@@ -1,0 +1,345 @@
+---
+const couleurs = ["Coeur", "Carreau", "Pique", "Trèfle"];
+const encheres = [80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 250, 500];
+const CARTES = {
+  "7": 0,
+  "8": 1,
+  "9": 2,
+  "10": 3,
+  Valet: 4,
+  Dame: 5,
+  Roi: 6,
+  As: 7,
+};
+---
+
+<div class="calculator">
+  <div class="hand-input">
+    <h2>Vos cartes</h2>
+    <div class="cards-selection">
+      {couleurs.map((couleur) => (
+        <div class="suit-group">
+          <h3>{couleur}</h3>
+          <div class="cards">
+            {Object.keys(CARTES).map((carte) => (
+              <label>
+                <input 
+                  type="checkbox" 
+                  name="cards" 
+                  value={`${carte}-${couleur}`}
+                  data-card={carte}
+                  data-suit={couleur}
+                />
+                {carte}
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <div class="bidding-section">
+    <h2>Enchères</h2>
+    <div class="bidding-input">
+      <select id="player">
+        <option value="adversaire1">Adversaire 1</option>
+        <option value="partenaire">Partenaire</option>
+        <option value="adversaire2">Adversaire 2</option>
+      </select>
+      <select id="bid-type">
+        <option value="passe">Passe</option>
+        <option value="enchere">Enchère</option>
+      </select>
+      <select id="bid-amount" disabled>
+        <option value="">Montant</option>
+        {encheres.map((montant) => (
+          <option value={montant}>{montant}</option>
+        ))}
+      </select>
+      <select id="bid-suit" disabled>
+        <option value="">Couleur</option>
+        {couleurs.map((couleur) => (
+          <option value={couleur}>{couleur}</option>
+        ))}
+      </select>
+      <button id="add-bid">Ajouter l'enchère</button>
+    </div>
+    <div id="bidding-history"></div>
+  </div>
+
+  <div class="probabilities">
+    <h2>Cartes probables par joueur</h2>
+    <div class="players-grid">
+      <div class="player-cards">
+        <h3>Partenaire</h3>
+        <div id="partner-likely-cards" class="likely-cards"></div>
+      </div>
+      <div class="player-cards">
+        <h3>Adversaire 1</h3>
+        <div id="opponent1-likely-cards" class="likely-cards"></div>
+      </div>
+      <div class="player-cards">
+        <h3>Adversaire 2</h3>
+        <div id="opponent2-likely-cards" class="likely-cards"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CARTES = {
+    "7": 0,
+    "8": 1,
+    "9": 2,
+    "10": 3,
+    Valet: 4,
+    Dame: 5,
+    Roi: 6,
+    As: 7,
+  };
+  const couleurs = ["Coeur", "Carreau", "Pique", "Trèfle"];
+const encheres = [80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 250, 500];document.addEventListener('DOMContentLoaded', () => {
+    let selectedCards = new Set();
+    let biddingHistory = [];
+    
+    // Enable/disable bid inputs based on type
+    document.getElementById('bid-type').addEventListener('change', (e) => {
+      const isEnchere = e.target.value === 'enchere';
+      document.getElementById('bid-amount').disabled = !isEnchere;
+      document.getElementById('bid-suit').disabled = !isEnchere;
+    });
+
+    function calculateCardProbability(card, suit, playerType, bidHistory) {
+      if (selectedCards.has(`${card}-${suit}`)) return 0;
+      
+      let probability = 0.33; // Base probability
+      
+      bidHistory.forEach(bid => {
+        if (bid.player === playerType && bid.type === 'enchere') {
+          if (bid.suit === suit) {
+            probability *= 1.5; // Augmente la probabilité pour la couleur d'enchère
+            
+            // Augmente encore plus pour les cartes fortes dans la couleur d'enchère
+            const cardValue = {
+              "As": 0.3,
+              "10": 0.25,
+              "Roi": 0.2,
+              "Dame": 0.15,
+              "Valet": 0.1
+            }[card] || 0;
+            
+            probability *= (1 + cardValue);
+          } else {
+            probability *= 0.8; // Diminue la probabilité pour les autres couleurs
+          }
+        }
+      });
+      
+      return Math.min(probability, 1); // Cap à 100%
+    }
+
+    function updateProbabilities() {
+      const allCards = Object.keys(CARTES);
+      const playerProbabilities = {
+        partenaire: [],
+        adversaire1: [],
+        adversaire2: []
+      };
+      
+      // Calculer toutes les probabilités
+      couleurs.forEach(suit => {
+        allCards.forEach(card => {
+          const cardId = `${card}-${suit}`;
+          if (!selectedCards.has(cardId)) {
+            const partnerProb = calculateCardProbability(card, suit, 'partenaire', biddingHistory);
+            const opp1Prob = calculateCardProbability(card, suit, 'adversaire1', biddingHistory);
+            const opp2Prob = calculateCardProbability(card, suit, 'adversaire2', biddingHistory);
+            
+            playerProbabilities.partenaire.push({ card, suit, prob: partnerProb });
+            playerProbabilities.adversaire1.push({ card, suit, prob: opp1Prob });
+            playerProbabilities.adversaire2.push({ card, suit, prob: opp2Prob });
+          }
+        });
+      });
+
+      // Afficher les 8 cartes les plus probables pour chaque joueur
+      Object.entries(playerProbabilities).forEach(([player, cards]) => {
+        const sortedCards = cards
+          .sort((a, b) => b.prob - a.prob)
+          .slice(0, 8);
+        
+        const container = document.getElementById(`${player}-likely-cards`);
+        if (container) {
+          container.innerHTML = sortedCards
+            .map(({card, suit, prob}) => `
+              <div class="likely-card">
+                <span class="card-info">${card} de ${suit}</span>
+                <div class="probability">${Math.round(prob * 100)}%</div>
+              </div>
+            `)
+            .join('');
+        }
+      });
+    }
+    
+    // Card selection handlers
+    document.querySelectorAll('input[name="cards"]').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const cardId = `${e.target.dataset.card}-${e.target.dataset.suit}`;
+        if (e.target.checked) {
+          selectedCards.add(cardId);
+        } else {
+          selectedCards.delete(cardId);
+        }
+        updateProbabilities();
+      });
+    });
+    
+    // Bidding handlers
+    document.getElementById('add-bid').addEventListener('click', () => {
+      const player = document.getElementById('player').value;
+      const bidType = document.getElementById('bid-type').value;
+      const amount = document.getElementById('bid-amount').value;
+      const suit = document.getElementById('bid-suit').value;
+      
+      const bid = { 
+        player, 
+        type: bidType,
+        amount: bidType === 'enchere' ? amount : null,
+        suit: bidType === 'enchere' ? suit : null
+      };
+      
+      biddingHistory.push(bid);
+      
+      // Update bidding history display
+      const historyDiv = document.getElementById('bidding-history');
+      const bidEntry = document.createElement('div');
+      bidEntry.textContent = bidType === 'passe' 
+        ? `${player}: Passe`
+        : `${player}: ${amount} à ${suit}`;
+      historyDiv.appendChild(bidEntry);
+      
+      updateProbabilities();
+    });
+
+    // Initial probability calculation
+    updateProbabilities();
+  });
+</script>
+
+<style>
+  .calculator {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: #f5f5f5;
+    border-radius: 8px;
+  }
+
+  .hand-input, .bidding-section, .probabilities {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .cards-selection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .suit-group {
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 4px;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .bidding-input {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  select, button {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+
+  button {
+    background: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #0056b3;
+  }
+
+  #bidding-history {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 4px;
+    min-height: 100px;
+  }
+
+  .players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+
+  .player-cards {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .likely-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .likely-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: #f5f5f5;
+    border-radius: 4px;
+  }
+
+  .card-info {
+    font-weight: 500;
+  }
+
+  .probability {
+    background: #e0e0e0;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  h2 {
+    color: #333;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    color: #666;
+    margin-bottom: 0.5rem;
+  }
+</style>
