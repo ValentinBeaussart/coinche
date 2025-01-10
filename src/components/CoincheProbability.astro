@@ -59,6 +59,11 @@ const CARTES = {
         {encheres.map((montant) => (
           <option value={montant}>{montant}</option>
         ))}
+          <option value="10">+10</option>
+          <option value="20">+20</option>
+          <option value="30">+30</option>
+          <option value="40">+40</option>
+          <option value="50">+50</option>
       </select>
       <select id="bid-suit" disabled>
         <option value="">Couleur</option>
@@ -108,66 +113,140 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedCards = new Set();
   let biddingHistory = [];
 
-  // Désactiver/activer les cases à cocher en fonction de la sélection de cartes
-  document.querySelectorAll('input[name="cards"]').forEach((input) => {
-    input.addEventListener("change", (e) => {
-      const cardId = `${e.target.dataset.card}-${e.target.dataset.suit}`;
+  // Modification de la gestion des enchères
+  document.getElementById("add-bid").addEventListener("click", () => {
+    const player = document.getElementById("player").value;
+    const bidType = document.getElementById("bid-type").value;
+    const amount = document.getElementById("bid-amount").value;
+    const suit = document.getElementById("bid-suit").value;
 
-      if (e.target.checked) {
-        selectedCards.add(cardId);
-      } else {
-        selectedCards.delete(cardId);
-      }
-
-      // Désactiver les cases à cocher si 8 cartes sont sélectionnées
-      const allInputs = document.querySelectorAll('input[name="cards"]');
-      if (selectedCards.size >= 8) {
-        allInputs.forEach((checkbox) => {
-          if (!checkbox.checked) checkbox.disabled = true;
-        });
-      } else {
-        allInputs.forEach((checkbox) => {
-          checkbox.disabled = false;
-        });
-      }
-      detectCombinations(); // Mettre à jour les combinaisons
-
-      updateProbabilities();
-    });
-  });
-
-  document.getElementById("bid-type").addEventListener("change", (e) => {
-  const bidType = e.target.value;
-  const bidAmount = document.getElementById("bid-amount");
-  const bidSuit = document.getElementById("bid-suit");
-
-  if (bidType === "enchere") {
-    bidAmount.disabled = false;
-    bidSuit.disabled = false;
-  } else {
-    bidAmount.disabled = true;
-    bidSuit.disabled = true;
-  }
-});
-function calculateCardProbability(card, suit, playerType, bidHistory) {
-  if (selectedCards.has(`${card}-${suit}`)) return 0;
-
-  let probability = 0.33; // Probabilité de base
-
-  bidHistory.forEach((bid) => {
-    if (bid.type === "enchere") {
-      if (bid.player === playerType) {
-        // Si le joueur a enchéri sur la couleur, augmente la probabilité pour cette couleur
-        probability *= bid.suit === suit ? 1.8 : 0.5;
-      } else {
-        // Si un autre joueur a enchéri sur la couleur, diminue la probabilité
-        probability *= bid.suit === suit ? 0.3 : 1.1;
-      }
+    // Si l'enchère est une valeur +10, +20, etc., on la traite différemment
+    let adjustedAmount = amount;
+    if (amount.includes('+')) {
+      adjustedAmount = parseInt(amount.replace('+', ''));
+      handleSpecialBids(player, adjustedAmount);  // Gestion des enchères spéciales
     }
+
+    const bid = {
+      player,
+      type: bidType,
+      amount: bidType === "enchere" ? adjustedAmount : null,
+      suit: bidType === "enchere" ? suit : null,
+    };
+
+    biddingHistory.push(bid);
+
+    const historyDiv = document.getElementById("bidding-history");
+    const bidEntry = document.createElement("div");
+    bidEntry.textContent =
+      bidType === "passe"
+        ? `${player}: Passe`
+        : `${player}: ${adjustedAmount} à ${suit}`;
+    historyDiv.appendChild(bidEntry);
+
+    updateProbabilities();
   });
 
-  return Math.min(probability, 1); // Limiter la probabilité à 1
-}
+  function handleSpecialBids(player, amount) {
+    // Traiter les enchères spéciales +10, +20, +30, etc.
+    // Ex: Si un joueur mise +10, cela peut signifier qu'il a un As dans une autre couleur
+    // ou s'il mise +20, cela peut signifier qu'il a une belote (Roi et Dame de la même couleur).
+
+    biddingHistory.forEach((bid) => {
+      if (bid.player !== player && bid.type === "enchere") {
+        if (amount === 10) {
+          // Augmenter les probabilités de l'As dans une autre couleur pour l'adversaire
+          adjustProbabilitiesForOpponent(bid.player, "As", 0.15);
+        } else if (amount === 20) {
+          // Valet ou Belote
+          adjustProbabilitiesForOpponent(bid.player, "Valet", 0.2);
+          adjustProbabilitiesForOpponent(bid.player, "Roi", 0.2);
+          adjustProbabilitiesForOpponent(bid.player, "Dame", 0.2);
+        }
+        // Ajouter d'autres cas pour +30, +40, +50 si nécessaire
+      }
+    });
+  }
+
+  function adjustProbabilitiesForOpponent(player, card, probability) {
+    // Ajuster les probabilités pour un adversaire spécifique
+    const suitProbabilities = {
+      partenaire: document.getElementById("partenaire-likely-cards"),
+      adversaire1: document.getElementById("adversaire1-likely-cards"),
+      adversaire2: document.getElementById("adversaire2-likely-cards"),
+    };
+
+    if (suitProbabilities[player]) {
+      const cardId = `${card}-*`;  // Utiliser '*' pour signifier qu'il s'agit de n'importe quelle couleur
+      // Ajuster la probabilité pour cette carte
+      suitProbabilities[player].querySelectorAll(`.likely-card`).forEach((cardElement) => {
+        if (cardElement.querySelector(".card-info").textContent.includes(card)) {
+          const probElement = cardElement.querySelector(".probability");
+          const currentProb = parseInt(probElement.textContent.replace('%', '')) / 100;
+          probElement.textContent = `${Math.min(currentProb + probability, 1) * 100}%`;
+        }
+      });
+    }
+  }
+
+  function updateProbabilities() {
+    const allCards = Object.keys(CARTES);
+    const playerProbabilities = {
+      partenaire: {},
+      adversaire1: {},
+      adversaire2: {},
+    };
+
+    couleurs.forEach((suit) => {
+      allCards.forEach((card) => {
+        const cardId = `${card}-${suit}`;
+
+        if (!selectedCards.has(cardId)) {
+          playerProbabilities.partenaire[cardId] = calculateCardProbability(
+            card,
+            suit,
+            "partenaire",
+            biddingHistory
+          );
+          playerProbabilities.adversaire1[cardId] = calculateCardProbability(
+            card,
+            suit,
+            "adversaire1",
+            biddingHistory
+          );
+          playerProbabilities.adversaire2[cardId] = calculateCardProbability(
+            card,
+            suit,
+            "adversaire2",
+            biddingHistory
+          );
+        }
+      });
+    });
+
+    assignCardsToPlayers(playerProbabilities);
+  }
+
+  function calculateCardProbability(card, suit, playerType, bidHistory) {
+    if (selectedCards.has(`${card}-${suit}`)) return 0;
+
+    let probability = 0.33; // Probabilité de base
+
+    bidHistory.forEach((bid) => {
+      if (bid.type === "enchere") {
+        if (bid.player === playerType) {
+          // Si le joueur a enchéri sur la couleur, augmente la probabilité pour cette couleur
+          probability *= bid.suit === suit ? 1.8 : 0.5;
+        } else {
+          // Si un autre joueur a enchéri sur la couleur, diminue la probabilité
+          probability *= bid.suit === suit ? 0.3 : 1.1;
+        }
+      }
+    });
+
+    return Math.min(probability, 1); // Limiter la probabilité à 1
+  }
+
 function detectCombinations() {
   const combinationsDiv = document.getElementById("combinations");
   combinationsDiv.innerHTML = ""; // Réinitialiser l'affichage
@@ -210,43 +289,43 @@ function detectCombinations() {
 }
 
 
-  function updateProbabilities() {
-    const allCards = Object.keys(CARTES);
-    const playerProbabilities = {
-      partenaire: {},
-      adversaire1: {},
-      adversaire2: {},
-    };
+  // function updateProbabilities() {
+  //   const allCards = Object.keys(CARTES);
+  //   const playerProbabilities = {
+  //     partenaire: {},
+  //     adversaire1: {},
+  //     adversaire2: {},
+  //   };
 
-    couleurs.forEach((suit) => {
-      allCards.forEach((card) => {
-        const cardId = `${card}-${suit}`;
+  //   couleurs.forEach((suit) => {
+  //     allCards.forEach((card) => {
+  //       const cardId = `${card}-${suit}`;
 
-        if (!selectedCards.has(cardId)) {
-          playerProbabilities.partenaire[cardId] = calculateCardProbability(
-            card,
-            suit,
-            "partenaire",
-            biddingHistory
-          );
-          playerProbabilities.adversaire1[cardId] = calculateCardProbability(
-            card,
-            suit,
-            "adversaire1",
-            biddingHistory
-          );
-          playerProbabilities.adversaire2[cardId] = calculateCardProbability(
-            card,
-            suit,
-            "adversaire2",
-            biddingHistory
-          );
-        }
-      });
-    });
+  //       if (!selectedCards.has(cardId)) {
+  //         playerProbabilities.partenaire[cardId] = calculateCardProbability(
+  //           card,
+  //           suit,
+  //           "partenaire",
+  //           biddingHistory
+  //         );
+  //         playerProbabilities.adversaire1[cardId] = calculateCardProbability(
+  //           card,
+  //           suit,
+  //           "adversaire1",
+  //           biddingHistory
+  //         );
+  //         playerProbabilities.adversaire2[cardId] = calculateCardProbability(
+  //           card,
+  //           suit,
+  //           "adversaire2",
+  //           biddingHistory
+  //         );
+  //       }
+  //     });
+  //   });
 
-    assignCardsToPlayers(playerProbabilities);
-  }
+  //   assignCardsToPlayers(playerProbabilities);
+  // }
 
   function assignCardsToPlayers(probabilities) {
     const assignedCards = new Set();
