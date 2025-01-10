@@ -88,7 +88,7 @@ const CARTES = {
 </div>
 
 <script>
- const CARTES = {
+const CARTES = {
   "7": 0,
   "8": 1,
   "9": 2,
@@ -105,139 +105,115 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedCards = new Set();
   let biddingHistory = [];
 
-  console.log("Document chargé, initialisation des variables...");
-
-  // Enable/disable bid inputs based on type
-  document.getElementById("bid-type").addEventListener("change", (e) => {
-    const isEnchere = e.target.value === "enchere";
-    document.getElementById("bid-amount").disabled = !isEnchere;
-    document.getElementById("bid-suit").disabled = !isEnchere;
-    console.log(
-      `Type d'enchère sélectionné : ${e.target.value}. Champs activés : ${isEnchere}`
-    );
-  });
-
-function calculateCardProbability(card, suit, playerType, bidHistory) {
-    console.log(`Calcul de probabilité pour ${card} de ${suit} pour ${playerType}`);
-
-    if (selectedCards.has(`${card}-${suit}`)) {
-        console.log(`${card} de ${suit} est déjà sélectionnée. Probabilité = 0`);
-        return 0;
-    }
-
-    let probability = 0.33; // Probabilité de base
-    console.log(`Probabilité de base : ${probability}`);
-
-    // Calculer l'influence des enchères
-    bidHistory.forEach((bid) => {
-        if (bid.player === playerType && bid.type === "enchere") {
-            if (bid.suit === suit) {
-                probability *= 1.5; // Augmentation pour la couleur d'enchère
-                console.log(`Enchère sur ${suit}. Augmentation de probabilité à ${probability}`);
-                
-                const cardValue = {
-                    As: 0.3,
-                    "10": 0.25,
-                    Roi: 0.2,
-                    Dame: 0.15,
-                    Valet: 0.1,
-                }[card] || 0;
-
-                probability *= 1 + cardValue; // Augmentation spécifique selon la carte
-                console.log(`Augmentation pour ${card} : ${probability}`);
-            } else {
-                probability *= 0.8; // Réduction pour les autres couleurs
-                console.log(`Couleur différente de l'enchère. Réduction à ${probability}`);
-            }
-        }
-    });
-
-    return Math.min(probability, 1); // Limiter la probabilité à 100%
-}
-
-function updateProbabilities() {
-    console.log("Mise à jour des probabilités...");
-
-    const allCards = Object.keys(CARTES);
-    const playerProbabilities = {
-        partenaire: [],
-        adversaire1: [],
-        adversaire2: [],
-    };
-
-    couleurs.forEach((suit) => {
-        allCards.forEach((card) => {
-            const cardId = `${card}-${suit}`;
-            if (!selectedCards.has(cardId)) {
-                const partnerProb = calculateCardProbability(
-                    card,
-                    suit,
-                    "partenaire",
-                    biddingHistory
-                );
-                const opp1Prob = calculateCardProbability(
-                    card,
-                    suit,
-                    "adversaire1",
-                    biddingHistory
-                );
-                const opp2Prob = calculateCardProbability(
-                    card,
-                    suit,
-                    "adversaire2",
-                    biddingHistory
-                );
-
-                playerProbabilities.partenaire.push({ card, suit, prob: partnerProb });
-                playerProbabilities.adversaire1.push({ card, suit, prob: opp1Prob });
-                playerProbabilities.adversaire2.push({ card, suit, prob: opp2Prob });
-
-                console.log(
-                    `Probabilités calculées pour ${card} de ${suit}: Partenaire=${partnerProb}, Adversaire 1=${opp1Prob}, Adversaire 2=${opp2Prob}`
-                );
-            }
-        });
-    });
-
-    // Attribuer la carte la plus probable à chaque joueur
-    Object.entries(playerProbabilities).forEach(([player, cards]) => {
-        const sortedCards = cards
-            .sort((a, b) => b.prob - a.prob)
-            .slice(0, 8); // Prendre les 8 cartes les plus probables
-
-        const container = document.getElementById(`${player}-likely-cards`);
-        console.log(`Mise à jour du conteneur pour ${player}`, sortedCards);
-
-        if (container) {
-            container.innerHTML = sortedCards
-                .map(
-                    ({ card, suit, prob }) => `
-                <div class="likely-card">
-                    <span class="card-info">${card} de ${suit}</span>
-                    <div class="probability">${Math.round(prob * 100)}%</div>
-                </div>`
-                )
-                .join("");
-        } else {
-            console.error(`Conteneur introuvable pour ${player}`);
-        }
-    });
-}
-
-
+  // Disable/enable checkboxes based on card selection
   document.querySelectorAll('input[name="cards"]').forEach((input) => {
     input.addEventListener("change", (e) => {
       const cardId = `${e.target.dataset.card}-${e.target.dataset.suit}`;
+
       if (e.target.checked) {
         selectedCards.add(cardId);
       } else {
         selectedCards.delete(cardId);
       }
-      console.log("Cartes sélectionnées :", Array.from(selectedCards));
+
+      // Disable checkboxes if 8 cards are selected
+      const allInputs = document.querySelectorAll('input[name="cards"]');
+      if (selectedCards.size >= 8) {
+        allInputs.forEach((checkbox) => {
+          if (!checkbox.checked) checkbox.disabled = true;
+        });
+      } else {
+        allInputs.forEach((checkbox) => {
+          checkbox.disabled = false;
+        });
+      }
+
       updateProbabilities();
     });
   });
 
+  // Update probabilities based on card selection and bids
+  function calculateCardProbability(card, suit, playerType, bidHistory) {
+    if (selectedCards.has(`${card}-${suit}`)) return 0;
+
+    let probability = 0.33; // Base probability
+
+    bidHistory.forEach((bid) => {
+      if (bid.player === playerType && bid.type === "enchere") {
+        if (bid.suit === suit) {
+          probability *= 1.5;
+        } else {
+          probability *= 0.8;
+        }
+      }
+    });
+
+    return Math.min(probability, 1);
+  }
+
+  function updateProbabilities() {
+    const allCards = Object.keys(CARTES);
+    const playerProbabilities = {
+      partenaire: {},
+      adversaire1: {},
+      adversaire2: {},
+    };
+
+    couleurs.forEach((suit) => {
+      allCards.forEach((card) => {
+        const cardId = `${card}-${suit}`;
+
+        if (!selectedCards.has(cardId)) {
+          playerProbabilities.partenaire[cardId] = calculateCardProbability(
+            card,
+            suit,
+            "partenaire",
+            biddingHistory
+          );
+          playerProbabilities.adversaire1[cardId] = calculateCardProbability(
+            card,
+            suit,
+            "adversaire1",
+            biddingHistory
+          );
+          playerProbabilities.adversaire2[cardId] = calculateCardProbability(
+            card,
+            suit,
+            "adversaire2",
+            biddingHistory
+          );
+        }
+      });
+    });
+
+    assignCardsToPlayers(playerProbabilities);
+  }
+
+  function assignCardsToPlayers(probabilities) {
+    const assignedCards = new Set();
+
+    Object.keys(probabilities).forEach((player) => {
+      const playerCards = Object.entries(probabilities[player])
+        .filter(([cardId]) => !assignedCards.has(cardId))
+        .sort(([, probA], [, probB]) => probB - probA);
+
+      const container = document.getElementById(`${player}-likely-cards`);
+      container.innerHTML = playerCards
+        .slice(0, 8) // Limit to 8 cards per player
+        .map(
+          ([cardId, prob]) => `
+            <div class="likely-card">
+              <span class="card-info">${cardId.replace("-", " de ")}</span>
+              <div class="probability">${Math.round(prob * 100)}%</div>
+            </div>`
+        )
+        .join("");
+
+      playerCards.slice(0, 8).forEach(([cardId]) => assignedCards.add(cardId));
+    });
+  }
+
+  // Handle adding bids
   document.getElementById("add-bid").addEventListener("click", () => {
     const player = document.getElementById("player").value;
     const bidType = document.getElementById("bid-type").value;
@@ -253,8 +229,6 @@ function updateProbabilities() {
 
     biddingHistory.push(bid);
 
-    console.log("Nouvelle enchère ajoutée :", biddingHistory);
-
     const historyDiv = document.getElementById("bidding-history");
     const bidEntry = document.createElement("div");
     bidEntry.textContent =
@@ -267,7 +241,6 @@ function updateProbabilities() {
   });
 
   updateProbabilities();
-});
 
 
 </script>
