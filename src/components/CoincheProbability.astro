@@ -104,6 +104,8 @@ const encheres = [80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 250, 500]
 document.addEventListener("DOMContentLoaded", () => {
   let selectedCards = new Set();
   let biddingHistory = [];
+  document.getElementById("bid-amount").disabled = true;
+  document.getElementById("bid-suit").disabled = true;
 
   // Désactiver/activer les cases à cocher en fonction de la sélection de cartes
   document.querySelectorAll('input[name="cards"]').forEach((input) => {
@@ -212,7 +214,19 @@ document.addEventListener("DOMContentLoaded", () => {
       playerCards.slice(0, 8).forEach(([cardId]) => assignedCards.add(cardId));
     });
   }
+document.getElementById("bid-type").addEventListener("change", (e) => {
+  const bidType = e.target.value;
+  const bidAmount = document.getElementById("bid-amount");
+  const bidSuit = document.getElementById("bid-suit");
 
+  if (bidType === "enchere") {
+    bidAmount.disabled = false;
+    bidSuit.disabled = false;
+  } else {
+    bidAmount.disabled = true;
+    bidSuit.disabled = true;
+  }
+});
   // Gestion des enchères
   document.getElementById("add-bid").addEventListener("click", () => {
     const player = document.getElementById("player").value;
