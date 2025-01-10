@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedCards = new Set();
   let biddingHistory = [];
 
-  // Disable/enable checkboxes based on card selection
+  // Désactiver/activer les cases à cocher en fonction de la sélection de cartes
   document.querySelectorAll('input[name="cards"]').forEach((input) => {
     input.addEventListener("change", (e) => {
       const cardId = `${e.target.dataset.card}-${e.target.dataset.suit}`;
@@ -116,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
         selectedCards.delete(cardId);
       }
 
-      // Disable checkboxes if 8 cards are selected
+      // Désactiver les cases à cocher si 8 cartes sont sélectionnées
       const allInputs = document.querySelectorAll('input[name="cards"]');
       if (selectedCards.size >= 8) {
         allInputs.forEach((checkbox) => {
@@ -132,11 +132,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Update probabilities based on card selection and bids
+  // Mise à jour des probabilités
   function calculateCardProbability(card, suit, playerType, bidHistory) {
     if (selectedCards.has(`${card}-${suit}`)) return 0;
 
-    let probability = 0.33; // Base probability
+    let probability = 0.33; // Probabilité de base
 
     bidHistory.forEach((bid) => {
       if (bid.player === playerType && bid.type === "enchere") {
@@ -199,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const container = document.getElementById(`${player}-likely-cards`);
       container.innerHTML = playerCards
-        .slice(0, 8) // Limit to 8 cards per player
+        .slice(0, 8) // Limiter à 8 cartes par joueur
         .map(
           ([cardId, prob]) => `
             <div class="likely-card">
@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Handle adding bids
+  // Gestion des enchères
   document.getElementById("add-bid").addEventListener("click", () => {
     const player = document.getElementById("player").value;
     const bidType = document.getElementById("bid-type").value;
@@ -241,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   updateProbabilities();
+}); 
 
 
 </script>
